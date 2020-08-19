@@ -40,6 +40,8 @@ def main():
     plt.imshow(image)
     plt.show()
 
+    # Check if all images in csv match the ones in file
+
     # Convert all images in the same size and greyscale
 
     # Plot each target example image
