@@ -34,7 +34,7 @@ def preprocess(csv_path):
     csv1["emotion"] = csv1["emotion"].replace(map_dict)
     print(csv1["emotion"].value_counts(normalize=True))
 
-    pie_plot(csv1["emotion"])
+    # pie_plot(csv1["emotion"])
 
     # Add dir into image name
     csv1["image"] = "data/images/" + csv1["image"]
@@ -71,7 +71,7 @@ def pie_plot(data):
     figure = plt.gcf()  # get current figure
     figure.set_size_inches(15, 15)
     plt.savefig("target_pie_chart.png", dpi=100)
-    plt.show()
+    # plt.show()
 
 
 def target_plot(data):
@@ -123,15 +123,18 @@ def create_dir(csv1):
 
 
 def parse_function(filename, label):
-    # image_string = tf.read_file(filename)
+    image = tf.io.read_file(filename)
 
     # Don't use tf.image.decode_image, or the output shape will be undefined
-    image = tf.image.decode_jpeg(filename, channels=3)
+    image = tf.image.decode_jpeg(image, channels=3)
+
+    # Convert to greyscale
+    image = tf.image.rgb_to_grayscale(image)
 
     # This will convert to float values in [0, 1]
     image = tf.image.convert_image_dtype(image, tf.float32)
 
-    resized_image = tf.image.resize_images(image, [350, 350])
+    resized_image = tf.image.resize(image, [350, 350])
 
     return resized_image, label
 
@@ -199,10 +202,15 @@ def main():
     X_train, X_val, y_train, y_val = train_test_split(data.image, data.emotion, test_size=0.2)
     X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, test_size=0.2)
 
+    image = parse_function("data/images/facial-expressions_2868582k.jpg", "check")
+    myarr = np.asarray(image[0])
+    final = myarr.reshape(350, 350)
+    plt.imshow(final)
+    plt.show()
     # Build data image pipeline for train, val and test set
-    train_dataset = data_pipeline(X_train, y_train)
-    val_dataset = data_pipeline(X_val, y_val)
-    test_dataset = data_pipeline(X_test, y_test)
+    # train_dataset = data_pipeline(X_train, y_train)
+    # val_dataset = data_pipeline(X_val, y_val)
+    # test_dataset = data_pipeline(X_test, y_test)
 
 
 if __name__ == "__main__":
