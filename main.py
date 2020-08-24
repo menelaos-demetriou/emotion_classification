@@ -2,7 +2,6 @@ import os
 import shutil
 import numpy as np
 import pandas as pd
-from PIL import Image
 
 import keras
 import tensorflow as tf
@@ -138,14 +137,8 @@ def create_dir(csv1):
 
 
 def parse_function(filename, label):
-
-
-    # Don't use tf.image.decode_image, or the output shape will be undefined
     image = tf.io.read_file(filename)
     image = tf.image.decode_jpeg(image, channels=1)
-
-    # Convert to greyscale
-    # image = tf.image.rgb_to_grayscale(image)
 
     # This will convert to float values in [0, 1]
     image = tf.image.convert_image_dtype(image, tf.float32)
@@ -167,15 +160,16 @@ def data_pipeline(filenames, labels):
 def create_model_1(num_classes, metrics):
     model = Sequential()
     model.add(
-        Conv2D(32, (3, 3), input_shape=(64, 64, 1), padding='same', activation='relu', kernel_constraint=maxnorm(3)))
+        Conv2D(32, (3, 3), input_shape=(64, 64, 1), padding='same', activation='relu'))
     model.add(Dropout(0.2))
-    model.add(Conv2D(32, (3, 3), activation='relu', padding='same', kernel_constraint=maxnorm(3)))
+    model.add(Conv2D(32, (3, 3), activation='relu', padding='same'))
     model.add(MaxPooling2D())
     model.add(Flatten())
-    model.add(Dense(512, activation='relu', kernel_constraint=maxnorm(3)))
+    model.add(Dense(512, activation='relu'))
     model.add(Dropout(0.5))
     model.add(Dense(num_classes, activation='softmax'))
-    model.compile(loss=keras.losses.SparseCategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3), metrics=metrics)
+    model.compile(loss=keras.losses.SparseCategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3),
+                  metrics=metrics)
     return model
 
 
@@ -195,12 +189,12 @@ def create_model_2(num_classes, metrics):
     model.add(MaxPooling2D())
     model.add(Flatten())
     model.add(Dropout(0.2))
-    model.add(Dense(1024, activation='relu', kernel_constraint=maxnorm(3)))
+    model.add(Dense(1024, activation='relu'))
     model.add(Dropout(0.2))
-    model.add(Dense(512, activation='relu', kernel_constraint=maxnorm(3)))
+    model.add(Dense(512, activation='relu'))
     model.add(Dropout(0.2))
     model.add(Dense(num_classes, activation='softmax'))
-    model.compile(loss=keras.losses.CategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3),
+    model.compile(loss=keras.losses.SparseCategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3),
                   metrics=metrics)
     return model
 
@@ -328,7 +322,7 @@ def main():
 
     # Get early stopping
     early_stopping = keras.callbacks.EarlyStopping(
-        monitor='val_acc',
+        monitor='val_accuracygit',
         verbose=1,
         patience=10,
         mode='max',
@@ -336,7 +330,6 @@ def main():
 
     # Define checkpoints
     checkpoint_path = "model/cp.ckpt"
-    checkpoint_dir = os.path.dirname(checkpoint_path)
     cp_callback = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
                                                   save_weights_only=True,
                                                   verbose=1)
@@ -348,6 +341,7 @@ def main():
 
     class_weights = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
     class_weights = dict(enumerate(class_weights))
+
     # Train model
     training_history = model.fit(train_dataset, epochs=500, batch_size=batch_size,
                                  callbacks=[early_stopping, cp_callback],
