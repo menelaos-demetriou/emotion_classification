@@ -322,7 +322,7 @@ def main():
 
     # Get early stopping
     early_stopping = keras.callbacks.EarlyStopping(
-        monitor='val_accuracygit',
+        monitor='val_accuracy',
         verbose=1,
         patience=10,
         mode='max',
