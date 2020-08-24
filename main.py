@@ -210,7 +210,7 @@ def plot_loss(history, label, n):
     plt.ylabel('Loss')
 
     plt.legend()
-    plt.savefig("plots/loss_plot.png")
+    plt.savefig("results/loss_plot.png")
     plt.clf()
 
 
@@ -232,7 +232,7 @@ def plot_metrics(history):
           plt.ylim([0, 1])
 
         plt.legend()
-    plt.savefig("plots/metrics_plot.png")
+    plt.savefig("results/metrics_plot.png")
     plt.clf()
 
 
