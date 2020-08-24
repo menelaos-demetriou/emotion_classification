@@ -1,22 +1,30 @@
 import os
-import PIL
 import shutil
-import PIL.Image as img
 import numpy as np
 import pandas as pd
 
+import keras
 import tensorflow as tf
 from keras.models import Sequential
 from keras.layers import Dense
 from keras.layers import Dropout
 from keras.layers import Flatten
 from keras.constraints import maxnorm
+from sklearn.metrics import roc_curve
+from sklearn.metrics import confusion_matrix
+from keras.utils.vis_utils import plot_model
+from ann_visualizer.visualize import ann_viz
 from keras.layers.convolutional import Conv2D
+from sklearn.preprocessing import LabelEncoder
 from keras.layers.convolutional import MaxPooling2D
 from sklearn.model_selection import train_test_split
 
+import matplotlib as mpl
 import matplotlib.pyplot as plt
-plt.style.use('ggplot')
+mpl.rcParams['figure.figsize'] = (12, 10)
+colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+
+# plt.style.use('ggplot')
 
 
 batch_size = 32
@@ -134,7 +142,7 @@ def parse_function(filename, label):
     # This will convert to float values in [0, 1]
     image = tf.image.convert_image_dtype(image, tf.float32)
 
-    resized_image = tf.image.resize(image, [350, 350])
+    resized_image = tf.image.resize(image, [64, 64])
 
     return resized_image, label
 
@@ -148,10 +156,10 @@ def data_pipeline(filenames, labels):
     return dataset
 
 
-def create_model_1(num_classes):
+def create_model_1(num_classes, metrics):
     model = Sequential()
     model.add(
-        Conv2D(32, (3, 3), input_shape=(32, 32, 3), padding='same', activation='relu', kernel_constraint=maxnorm(3)))
+        Conv2D(32, (3, 3), input_shape=(64, 64, 1), padding='same', activation='relu', kernel_constraint=maxnorm(3)))
     model.add(Dropout(0.2))
     model.add(Conv2D(32, (3, 3), activation='relu', padding='same', kernel_constraint=maxnorm(3)))
     model.add(MaxPooling2D())
@@ -159,12 +167,13 @@ def create_model_1(num_classes):
     model.add(Dense(512, activation='relu', kernel_constraint=maxnorm(3)))
     model.add(Dropout(0.5))
     model.add(Dense(num_classes, activation='softmax'))
+    model.compile(loss=keras.losses.CategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3), metrics=metrics)
     return model
 
 
-def create_model_2(num_classes):
+def create_model_2(num_classes, metrics):
     model = Sequential()
-    model.add(Conv2D(32, (3, 3), input_shape=(32, 32, 3), activation='relu', padding='same'))
+    model.add(Conv2D(32, (3, 3), input_shape=(64, 64, 1), activation='relu', padding='same'))
     model.add(Dropout(0.2))
     model.add(Conv2D(32, (3, 3), activation='relu', padding='same'))
     model.add(MaxPooling2D())
@@ -183,7 +192,59 @@ def create_model_2(num_classes):
     model.add(Dense(512, activation='relu', kernel_constraint=maxnorm(3)))
     model.add(Dropout(0.2))
     model.add(Dense(num_classes, activation='softmax'))
+    model.compile(loss=keras.losses.CategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3),
+                  metrics=metrics)
     return model
+
+
+def plot_loss(history, label, n):
+    # Use a log scale to show the wide range of values.
+    plt.semilogy(history.epoch, history.history['loss'],
+                 color=colors[n], label='Train ' + label)
+    plt.semilogy(history.epoch, history.history['val_loss'],
+                 color=colors[n], label='Val ' + label,
+                 linestyle="--")
+    plt.xlabel('Epoch')
+    plt.ylabel('Loss')
+
+    plt.legend()
+    plt.savefig("plots/loss_plot.png")
+    plt.clf()
+
+
+def plot_metrics(history):
+    metrics = ['loss', 'auc', 'precision', 'recall']
+    for n, metric in enumerate(metrics):
+        name = metric.replace("_", " ").capitalize()
+        plt.subplot(2, 2, n+1)
+        plt.plot(history.epoch,  history.history[metric], color=colors[0], label='Train')
+        plt.plot(history.epoch, history.history['val_'+metric],
+                 color=colors[0], linestyle="--", label='Val')
+        plt.xlabel('Epoch')
+        plt.ylabel(name)
+        if metric == 'loss':
+          plt.ylim([0, plt.ylim()[1]])
+        elif metric == 'auc':
+          plt.ylim([0.8, 1])
+        else:
+          plt.ylim([0, 1])
+
+        plt.legend()
+    plt.savefig("plots/metrics_plot.png")
+    plt.clf()
+
+
+def plot_roc(name, labels, predictions, **kwargs):
+    fp, tp, _ = roc_curve(labels, predictions)
+
+    plt.plot(100 * fp, 100 * tp, label=name, linewidth=2, **kwargs)
+    plt.xlabel('False positives [%]')
+    plt.ylabel('True positives [%]')
+    plt.xlim([-0.5, 20])
+    plt.ylim([80, 100.5])
+    plt.grid(True)
+    ax = plt.gca()
+    ax.set_aspect('equal')
 
 
 def main():
@@ -202,15 +263,57 @@ def main():
     X_train, X_val, y_train, y_val = train_test_split(data.image, data.emotion, test_size=0.2)
     X_train, X_test, y_train, y_test = train_test_split(X_train, y_train, test_size=0.2)
 
+    encoder = LabelEncoder()
+
+    y_train = encoder.fit_transform(y_train)
+    y_val = encoder.transform(y_val)
+    y_test = encoder.transform(y_test)
+
     image = parse_function("data/images/facial-expressions_2868582k.jpg", "check")
     myarr = np.asarray(image[0])
-    final = myarr.reshape(350, 350)
+    final = myarr.reshape(64, 64)
     plt.imshow(final)
+    plt.savefig("processed_image.jpg")
     plt.show()
+
     # Build data image pipeline for train, val and test set
-    # train_dataset = data_pipeline(X_train, y_train)
-    # val_dataset = data_pipeline(X_val, y_val)
-    # test_dataset = data_pipeline(X_test, y_test)
+    train_dataset = data_pipeline(X_train, y_train)
+    val_dataset = data_pipeline(X_val, y_val)
+    test_dataset = data_pipeline(X_test, y_test)
+
+    metrics = [
+        keras.metrics.TruePositives(name='tp'),
+        keras.metrics.FalsePositives(name='fp'),
+        keras.metrics.TrueNegatives(name='tn'),
+        keras.metrics.FalseNegatives(name='fn'),
+        keras.metrics.Accuracy(name='accuracy'),
+        keras.metrics.Precision(name='precision'),
+        keras.metrics.Recall(name='recall'),
+        keras.metrics.AUC(name='auc'),
+    ]
+
+    # Get early stopping
+    early_stopping = keras.callbacks.EarlyStopping(
+        monitor='val_auc',
+        verbose=1,
+        patience=10,
+        mode='max',
+        restore_best_weights=True)
+
+    # Define checkpoints
+    checkpoint_path = "model/cp.ckpt"
+    checkpoint_dir = os.path.dirname(checkpoint_path)
+    cp_callback = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                                  save_weights_only=True,
+                                                  verbose=1)
+
+    model = create_model_1(np.unique(y_train).size, metrics)
+    model.summary()
+    plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)
+    ann_viz(model, filename="neural_network.png", title="NN Architecture")
+    print("Hello")
+
+
 
 
 if __name__ == "__main__":
