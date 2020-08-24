@@ -2,16 +2,18 @@ import os
 import shutil
 import numpy as np
 import pandas as pd
+from PIL import Image
 
 import keras
 import tensorflow as tf
-from keras.models import Sequential
+import keras.backend as K
 from keras.layers import Dense
 from keras.layers import Dropout
 from keras.layers import Flatten
+from keras.models import Sequential
+from sklearn.utils import class_weight
 from keras.constraints import maxnorm
 from sklearn.metrics import roc_curve
-from sklearn.metrics import confusion_matrix
 from keras.utils.vis_utils import plot_model
 from ann_visualizer.visualize import ann_viz
 from keras.layers.convolutional import Conv2D
@@ -42,11 +44,16 @@ def preprocess(csv_path):
     csv1["emotion"] = csv1["emotion"].replace(map_dict)
     print(csv1["emotion"].value_counts(normalize=True))
 
+    # Needed to replace jpg to jpeg file typpe
+    csv1["image"] = csv1["image"].str.replace("jpg","jpeg")
+
     # pie_plot(csv1["emotion"])
 
     # Add dir into image name
     csv1["image"] = "data/images/" + csv1["image"]
 
+    # Remove no needed row
+    csv1 = csv1[csv1.image != 'data/images/facial-expressions_2868588k.jpeg']
     # Shuffle dataset
     csv1.sample(n=1, random_state=1)
     return csv1
@@ -60,13 +67,13 @@ def exploration(csv1):
     csv1["exists"] = csv1["image"].apply(check_exist)
     csv_len = len(csv1)
     csv_filter = len(csv1[csv1["exists"] == True])
-
-    all_dir_file = ["data/images/" + f for f in os.listdir("data/images") if
-                    os.path.isfile(os.path.join("data/images", f))]
-    csv_list = csv1["image"].to_list()
-    remaining_images = list(set(all_dir_file) - set(csv_list))
-    csv1 = csv1.drop("exists", axis=1)
-    return csv1, remaining_images
+    return csv1
+    # all_dir_file = ["data/images/" + f for f in os.listdir("data/images") if
+    #                 os.path.isfile(os.path.join("data/images", f))]
+    # csv_list = csv1["image"].to_list()
+    # remaining_images = list(set(all_dir_file) - set(csv_list))
+    # csv1 = csv1.drop("exists", axis=1)
+    # return csv1, remaining_images
 
 
 def pie_plot(data):
@@ -131,13 +138,14 @@ def create_dir(csv1):
 
 
 def parse_function(filename, label):
-    image = tf.io.read_file(filename)
+
 
     # Don't use tf.image.decode_image, or the output shape will be undefined
-    image = tf.image.decode_jpeg(image, channels=3)
+    image = tf.io.read_file(filename)
+    image = tf.image.decode_jpeg(image, channels=1)
 
     # Convert to greyscale
-    image = tf.image.rgb_to_grayscale(image)
+    # image = tf.image.rgb_to_grayscale(image)
 
     # This will convert to float values in [0, 1]
     image = tf.image.convert_image_dtype(image, tf.float32)
@@ -167,7 +175,7 @@ def create_model_1(num_classes, metrics):
     model.add(Dense(512, activation='relu', kernel_constraint=maxnorm(3)))
     model.add(Dropout(0.5))
     model.add(Dense(num_classes, activation='softmax'))
-    model.compile(loss=keras.losses.CategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3), metrics=metrics)
+    model.compile(loss=keras.losses.SparseCategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3), metrics=metrics)
     return model
 
 
@@ -247,6 +255,30 @@ def plot_roc(name, labels, predictions, **kwargs):
     ax.set_aspect('equal')
 
 
+# class CategoricalTruePositives(tf.keras.metrics.Metric):
+#
+#     def __init__(self, num_classes, batch_size,
+#                  name="categorical_true_positives", **kwargs):
+#         super(CategoricalTruePositives, self).__init__(name=name, **kwargs)
+#
+#         self.batch_size = batch_size
+#         self.num_classes = num_classes
+#
+#         self.cat_true_positives = self.add_weight(name="ctp", initializer="zeros")
+#
+#     def update_state(self, y_true, y_pred, sample_weight=None):
+#         y_true = K.argmax(y_true, axis=-1)
+#         y_pred = K.argmax(y_pred, axis=-1)
+#         y_true = K.flatten(y_true)
+#
+#         true_poss = K.sum(K.cast((K.equal(y_true, y_pred)), dtype=tf.float32))
+#
+#         self.cat_true_positives.assign_add(true_poss)
+#
+#     def result(self):
+#         return self.cat_true_positives
+
+
 def main():
     data = preprocess("data/legend.csv")
 
@@ -255,7 +287,7 @@ def main():
 
     # Analysis on dataset
     # data, remaining = exploration(data)
-
+    # test = exploration(data)
     # Plot image from each class
     # target_plot(data)
 
@@ -269,7 +301,7 @@ def main():
     y_val = encoder.transform(y_val)
     y_test = encoder.transform(y_test)
 
-    image = parse_function("data/images/facial-expressions_2868582k.jpg", "check")
+    image = parse_function('data/images/facial-expressions_2868582k.jpeg', "check")
     myarr = np.asarray(image[0])
     final = myarr.reshape(64, 64)
     plt.imshow(final)
@@ -281,20 +313,22 @@ def main():
     val_dataset = data_pipeline(X_val, y_val)
     test_dataset = data_pipeline(X_test, y_test)
 
-    metrics = [
-        keras.metrics.TruePositives(name='tp'),
-        keras.metrics.FalsePositives(name='fp'),
-        keras.metrics.TrueNegatives(name='tn'),
-        keras.metrics.FalseNegatives(name='fn'),
-        keras.metrics.Accuracy(name='accuracy'),
-        keras.metrics.Precision(name='precision'),
-        keras.metrics.Recall(name='recall'),
-        keras.metrics.AUC(name='auc'),
-    ]
+    metrics = keras.metrics.CategoricalAccuracy(name='accuracy')
+
+    # metrics = [
+    #     keras.metrics.TruePositives(name='tp'),
+    #     keras.metrics.FalsePositives(name='fp'),
+    #     keras.metrics.TrueNegatives(name='tn'),
+    #     keras.metrics.FalseNegatives(name='fn'),
+    #     keras.metrics.CategoricalAccuracy(name='accuracy'),
+    #     keras.metrics.Precision(name='precision'),
+    #     keras.metrics.Recall(name='recall'),
+    #     keras.metrics.AUC(name='auc'),
+    #     ]
 
     # Get early stopping
     early_stopping = keras.callbacks.EarlyStopping(
-        monitor='val_auc',
+        monitor='val_acc',
         verbose=1,
         patience=10,
         mode='max',
@@ -309,12 +343,41 @@ def main():
 
     model = create_model_1(np.unique(y_train).size, metrics)
     model.summary()
-    plot_model(model, to_file='model_plot.png', show_shapes=True, show_layer_names=True)
-    ann_viz(model, filename="neural_network.png", title="NN Architecture")
-    print("Hello")
+    plot_model(model, to_file='results/model_plot.png', show_shapes=True, show_layer_names=True)
+    # ann_viz(model, filename="results/neural_network.png", title="NN Architecture")
 
+    class_weights = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
+    class_weights = dict(enumerate(class_weights))
+    # Train model
+    training_history = model.fit(train_dataset, epochs=500, batch_size=batch_size,
+                                 callbacks=[early_stopping, cp_callback],
+                                 validation_data=val_dataset, class_weight=class_weights)
 
+    # Plot loss
+    plot_loss(training_history, "Training Loss", 0)
 
+    # Plot metrics
+    # plot_metrics(training_history)
+
+    # Perform evaluations on test set
+    train_predictions_baseline = model.predict(train_dataset)
+    test_predictions_baseline = model.predict(test_dataset)
+
+    # Evaluate test set
+    baseline_results = model.evaluate(test_dataset, verbose=0)
+
+    # Get metrics
+    for name, value in zip(model.metrics_names, baseline_results):
+        print(name, ': ', value)
+
+    # Plot confusion matrix
+    # plot_cm(y_test, test_predictions_baseline)
+
+    # Plot ROC curve
+    plot_roc("Train Baseline", y_train, train_predictions_baseline, color=colors[0])
+    plot_roc("Test Baseline", y_test, test_predictions_baseline, color=colors[0], linestyle='--')
+    plt.legend(loc='lower right')
+    plt.savefig("plots/roc_plot.png")
 
 if __name__ == "__main__":
     main()
