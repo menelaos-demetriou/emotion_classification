@@ -29,8 +29,8 @@ colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 
 batch_size = 32
-img_height = 350
-img_width = 350
+img_height = 150
+img_width = 150
 data_dir = "data/images/"
 
 
@@ -143,7 +143,7 @@ def parse_function(filename, label):
     # This will convert to float values in [0, 1]
     image = tf.image.convert_image_dtype(image, tf.float32)
 
-    resized_image = tf.image.resize(image, [64, 64])
+    resized_image = tf.image.resize(image, [img_height, img_width])
 
     return resized_image, label
 
@@ -160,7 +160,7 @@ def data_pipeline(filenames, labels):
 def create_model_1(num_classes, metrics):
     model = Sequential()
     model.add(
-        Conv2D(32, (3, 3), input_shape=(64, 64, 1), padding='same', activation='relu'))
+        Conv2D(32, (3, 3), input_shape=(img_height, img_width, 1), padding='same', activation='relu'))
     model.add(Dropout(0.2))
     model.add(Conv2D(32, (3, 3), activation='relu', padding='same'))
     model.add(MaxPooling2D())
@@ -297,7 +297,7 @@ def main():
 
     image = parse_function('data/images/facial-expressions_2868582k.jpeg', "check")
     myarr = np.asarray(image[0])
-    final = myarr.reshape(64, 64)
+    final = myarr.reshape(img_height, img_width)
     plt.imshow(final)
     plt.savefig("processed_image.jpg")
     plt.show()
@@ -350,7 +350,7 @@ def main():
     # Plot loss
     plot_loss(training_history, "Training Loss", 0)
 
-    # Plot metrics
+    # TODO: Support multiclass custom metrics
     # plot_metrics(training_history)
 
     # Perform evaluations on test set
@@ -364,14 +364,15 @@ def main():
     for name, value in zip(model.metrics_names, baseline_results):
         print(name, ': ', value)
 
+    # TODO: Support multiclass confusion matrix and ROC curve
     # Plot confusion matrix
     # plot_cm(y_test, test_predictions_baseline)
 
     # Plot ROC curve
-    plot_roc("Train Baseline", y_train, train_predictions_baseline, color=colors[0])
-    plot_roc("Test Baseline", y_test, test_predictions_baseline, color=colors[0], linestyle='--')
-    plt.legend(loc='lower right')
-    plt.savefig("plots/roc_plot.png")
+    # plot_roc("Train Baseline", y_train, train_predictions_baseline, color=colors[0])
+    # plot_roc("Test Baseline", y_test, test_predictions_baseline, color=colors[0], linestyle='--')
+    # plt.legend(loc='lower right')
+    # plt.savefig("results/roc_plot.png")
 
 if __name__ == "__main__":
     main()
