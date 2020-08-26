@@ -1,4 +1,5 @@
 import os
+import json
 import shutil
 import numpy as np
 import pandas as pd
@@ -29,8 +30,8 @@ colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 
 batch_size = 32
-img_height = 150
-img_width = 150
+img_height = 64
+img_width = 64
 data_dir = "data/images/"
 
 
@@ -295,6 +296,13 @@ def main():
     y_val = encoder.transform(y_val)
     y_test = encoder.transform(y_test)
 
+    num_classes = [str(x) for x in list(encoder.transform(encoder.classes_))]
+
+    label_mapping = dict(zip(num_classes, encoder.classes_))
+
+    with open('results/class_mapping.json', 'w') as fp:
+        json.dump(label_mapping, fp)
+
     image = parse_function('data/images/facial-expressions_2868582k.jpeg', "check")
     myarr = np.asarray(image[0])
     final = myarr.reshape(img_height, img_width)
@@ -332,6 +340,7 @@ def main():
     checkpoint_path = "model/cp.ckpt"
     cp_callback = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
                                                   save_weights_only=True,
+                                                  save_best_only=True,
                                                   verbose=1)
 
     model = create_model_1(np.unique(y_train).size, metrics)
@@ -339,6 +348,12 @@ def main():
     plot_model(model, to_file='results/model_plot.png', show_shapes=True, show_layer_names=True)
     # ann_viz(model, filename="results/neural_network.png", title="NN Architecture")
 
+    # Save model
+    model_json = model.to_json()
+    with open("model.json", "w") as json_file:
+        json_file.write(model_json)
+
+    # Set class weights
     class_weights = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
     class_weights = dict(enumerate(class_weights))
 
