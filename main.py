@@ -350,7 +350,7 @@ def main():
 
     # Save model
     model_json = model.to_json()
-    with open("model.json", "w") as json_file:
+    with open("results/model.json", "w") as json_file:
         json_file.write(model_json)
 
     # Set class weights
