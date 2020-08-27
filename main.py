@@ -1,18 +1,16 @@
 import os
+import sys
 import json
 import shutil
 import numpy as np
 import pandas as pd
 
-import keras
+from tensorflow import keras
 import tensorflow as tf
-import keras.backend as K
 from keras.layers import Dense
 from keras.layers import Dropout
 from keras.layers import Flatten
-from keras.models import Sequential
 from sklearn.utils import class_weight
-from keras.constraints import maxnorm
 from sklearn.metrics import roc_curve
 from keras.utils.vis_utils import plot_model
 from ann_visualizer.visualize import ann_viz
@@ -27,7 +25,6 @@ mpl.rcParams['figure.figsize'] = (12, 10)
 colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
 
 # plt.style.use('ggplot')
-
 
 batch_size = 32
 img_height = 64
@@ -159,43 +156,45 @@ def data_pipeline(filenames, labels):
 
 
 def create_model_1(num_classes, metrics):
-    model = Sequential()
+    model = tf.keras.models.Sequential()
     model.add(
-        Conv2D(32, (3, 3), input_shape=(img_height, img_width, 1), padding='same', activation='relu'))
+        Conv2D(32, (3, 3), input_shape=(img_height, img_width, 1), padding='same', activation='relu',
+               kernel_initializer='he_uniform'))
     model.add(Dropout(0.2))
-    model.add(Conv2D(32, (3, 3), activation='relu', padding='same'))
+    model.add(Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform'))
     model.add(MaxPooling2D())
     model.add(Flatten())
-    model.add(Dense(512, activation='relu'))
+    model.add(Dense(512, activation='relu', kernel_initializer='he_uniform'))
     model.add(Dropout(0.5))
     model.add(Dense(num_classes, activation='softmax'))
-    model.compile(loss=keras.losses.SparseCategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3),
+    model.compile(loss=tf.losses.SparseCategoricalCrossentropy(), optimizer=tf.optimizers.Adam(lr=1e-3),
                   metrics=metrics)
     return model
 
 
 def create_model_2(num_classes, metrics):
-    model = Sequential()
-    model.add(Conv2D(32, (3, 3), input_shape=(64, 64, 1), activation='relu', padding='same'))
+    model = tf.keras.models.Sequential()
+    model.add(Conv2D(32, (3, 3), input_shape=(64, 64, 1), activation='relu', padding='same',
+                     kernel_initializer='he_uniform'))
     model.add(Dropout(0.2))
-    model.add(Conv2D(32, (3, 3), activation='relu', padding='same'))
+    model.add(Conv2D(32, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform'))
     model.add(MaxPooling2D())
-    model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
+    model.add(Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform'))
     model.add(Dropout(0.2))
-    model.add(Conv2D(64, (3, 3), activation='relu', padding='same'))
+    model.add(Conv2D(64, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform'))
     model.add(MaxPooling2D())
-    model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+    model.add(Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform'))
     model.add(Dropout(0.2))
-    model.add(Conv2D(128, (3, 3), activation='relu', padding='same'))
+    model.add(Conv2D(128, (3, 3), activation='relu', padding='same', kernel_initializer='he_uniform'))
     model.add(MaxPooling2D())
     model.add(Flatten())
     model.add(Dropout(0.2))
-    model.add(Dense(1024, activation='relu'))
+    model.add(Dense(1024, activation='relu', kernel_initializer='he_uniform'))
     model.add(Dropout(0.2))
-    model.add(Dense(512, activation='relu'))
+    model.add(Dense(512, activation='relu', kernel_initializer='he_uniform'))
     model.add(Dropout(0.2))
     model.add(Dense(num_classes, activation='softmax'))
-    model.compile(loss=keras.losses.SparseCategoricalCrossentropy(), optimizer=keras.optimizers.Adam(lr=1e-3),
+    model.compile(loss=tf.losses.SparseCategoricalCrossentropy(), optimizer=tf.optimizers.Adam(lr=1e-3),
                   metrics=metrics)
     return model
 
@@ -250,6 +249,24 @@ def plot_roc(name, labels, predictions, **kwargs):
     ax.set_aspect('equal')
 
 
+# plot diagnostic learning curves
+def summarize_diagnostics(history):
+	# plot loss
+	plt.subplot(211)
+	plt.title('Cross Entropy Loss')
+	plt.plot(history.history['loss'], color='blue', label='train')
+	plt.plot(history.history['val_loss'], color='orange', label='test')
+	# plot accuracy
+	plt.subplot(212)
+	plt.title('Accuracy')
+	plt.plot(history.history['accuracy'], color='blue', label='train')
+	plt.plot(history.history['val_accuracy'], color='orange', label='test')
+	# save plot to file
+	filename = sys.argv[0].split('/')[-1]
+	plt.savefig(filename + '_plot.png')
+	plt.close()
+
+
 # class CategoricalTruePositives(tf.keras.metrics.Metric):
 #
 #     def __init__(self, num_classes, batch_size,
@@ -271,7 +288,7 @@ def plot_roc(name, labels, predictions, **kwargs):
 #         self.cat_true_positives.assign_add(true_poss)
 #
 #     def result(self):
-#         return self.cat_true_positives
+#         return self.cat_true_positives=
 
 
 def main():
@@ -337,8 +354,8 @@ def main():
         restore_best_weights=True)
 
     # Define checkpoints
-    checkpoint_path = "model/cp.ckpt"
-    cp_callback = keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+    checkpoint_path = "model/cp.cpkt"
+    cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
                                                   save_weights_only=True,
                                                   save_best_only=True,
                                                   verbose=1)
@@ -354,13 +371,13 @@ def main():
         json_file.write(model_json)
 
     # Set class weights
-    class_weights = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
-    class_weights = dict(enumerate(class_weights))
+    # class_weights = class_weight.compute_class_weight('balanced', np.unique(y_train), y_train)
+    # class_weights = dict(enumerate(class_weights))
 
     # Train model
     training_history = model.fit(train_dataset, epochs=500, batch_size=batch_size,
                                  callbacks=[early_stopping, cp_callback],
-                                 validation_data=val_dataset, class_weight=class_weights)
+                                 validation_data=val_dataset) #, class_weight=class_weights)
 
     # Plot loss
     plot_loss(training_history, "Training Loss", 0)
